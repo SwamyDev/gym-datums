@@ -1,0 +1,10 @@
+language: python
+python:
+  - '3.6'
+install:
+  - make install TARGET=test
+script:
+  - pip install python-coveralls
+  - make coverage
+after_success:
+  - coveralls

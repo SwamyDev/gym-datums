@@ -1,0 +1,10 @@
+[run]
+source = gym_datums/
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    except ImportError
+    raise ImportError
+    if __name__ == .__main__.:
+    raise NotImplementedErro
