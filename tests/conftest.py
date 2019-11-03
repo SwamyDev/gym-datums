@@ -4,7 +4,7 @@ import pytest
 
 class DatumStub:
     def __init__(self):
-        self._rows = [[0], [0]]
+        self._rows = [[1e-9], [1e-9]]
 
     def rows(self, *r):
         self._rows = list(r)

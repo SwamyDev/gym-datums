@@ -1,3 +1,5 @@
+from functools import wraps
+
 import numpy as np
 import pytest
 from gym import spaces
@@ -15,13 +17,24 @@ def make_env(datums):
     return factory
 
 
+@pytest.fixture
+def make_ready_env(make_env):
+    @wraps(make_env)
+    def reset_wrapper(*args, **kwargs):
+        env = make_env(*args, **kwargs)
+        env.reset()
+        return env
+
+    return reset_wrapper
+
+
 def test_adherence_to_gym_contract(make_env, gym_interface, gym_properties):
     assert_that(make_env(), follows_contract(gym_interface, gym_properties))
 
 
 @pytest.mark.parametrize('series, minmax', [
-    ([[0]], (0, 0)),
-    ([[-1], [0], [1]], (-1, 1)),
+    ([[1]], (1, 1)),
+    ([[-1], [1], [2]], (-1, 2)),
 ])
 def test_single_value_single_datum_observation_space(make_env, datums, series, minmax):
     datums.add().rows(*series)
@@ -94,12 +107,12 @@ def test_reset_combined_setup_observation(make_env, datums):
         [1, 1, 1],
     )
     datums.add().rows(
-        [0, -1, 1],
-        [1, 0, 2],
+        [1e-6, -1, 1],
+        [1, 1e-6, 2],
         [1, 1, 1],
     )
-    assert_obs_eq(make_env(window_size=2).reset(), [[[2, 3], [0, 1]],
-                                                    [[1, 2], [-1, 0]],
+    assert_obs_eq(make_env(window_size=2).reset(), [[[2, 3], [1e-6, 1]],
+                                                    [[1, 2], [-1, 1e-6]],
                                                     [[3, 4], [1, 2]]])
 
 
@@ -115,10 +128,9 @@ def test_create_returns_as_observations_when_configured(make_env, datums):
                                                                        [2, 0.25]])
 
 
-def test_stepping_the_environment_returns_next_observation(make_env, datums):
+def test_stepping_the_environment_returns_next_observation(make_ready_env, datums):
     datums.add().rows([1], [2], [3])
-    env = make_env()
-    env.reset()
+    env = make_ready_env()
     assert_obs_eq(unpack_obs(idle_step(env)), [2])
     assert_obs_eq(unpack_obs(idle_step(env)), [3])
 
@@ -127,19 +139,17 @@ def idle_step(env):
     return env.step(0)
 
 
-def test_resetting_the_environment_resets_observations(make_env, datums):
+def test_resetting_the_environment_resets_observations(make_ready_env, datums):
     datums.add().rows([1], [2], [3])
-    env = make_env()
-    env.reset()
+    env = make_ready_env()
     assert_obs_eq(unpack_obs(idle_step(env)), [2])
     env.reset()
     assert_obs_eq(unpack_obs(idle_step(env)), [2])
 
 
-def test_environment_is_done_at_the_last_observation(make_env, datums):
+def test_environment_is_done_at_the_last_observation(make_ready_env, datums):
     datums.add().rows([1], [2], [3])
-    env = make_env()
-    env.reset()
+    env = make_ready_env()
     assert not unpack_done(idle_step(env))
     assert unpack_done(idle_step(env))
 
@@ -151,15 +161,22 @@ def test_raise_an_error_when_not_enough_data_for_a_single_step(make_env, datums)
         env.reset()
 
 
-def test_stepping_with_returns(make_env, datums):
+def test_stepping_with_returns(make_ready_env, datums):
     datums.add().rows(
         [2, 1, 4],
         [4, 2, 8],
         [1, 4, 2],
         [1, 1, 1],
     )
-    env = make_env(window_size=2, calc_returns=True)
-    env.reset()
+    env = make_ready_env(window_size=2, calc_returns=True)
     assert_obs_eq(unpack_obs(idle_step(env)), [[0.25, 1],
                                                [2, 0.25],
                                                [0.25, 0.5]])
+
+
+@pytest.mark.parametrize('invalid', [0, np.nan, -np.inf, np.inf])
+def test_raise_error_when_upcoming_invalid_datum_is_encountered(make_ready_env, datums, invalid):
+    datums.add().rows([2], [1], [invalid])
+    env = make_ready_env()
+    with pytest.raises(DatumsError):
+        idle_step(env)

@@ -71,6 +71,10 @@ class PortfolioEnv(Env):
         obs = np.empty(shape=self._calc_shape)
         for asset, it in enumerate(self._datums_iters):
             obs[:, asset, :] = np.array(next(it)).transpose()
+
+        if not obs.all() or not np.isfinite(obs).all():
+            raise DatumsError(f'Encountered zero, NaN or inf values in observation data: {obs}')
+
         return obs
 
     def _shape_to_observation(self, obs):
