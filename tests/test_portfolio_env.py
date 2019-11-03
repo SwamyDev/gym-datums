@@ -3,7 +3,8 @@ import pytest
 from gym import spaces
 
 from gym_datums.envs import PortfolioEnv
-from tests.aux import assert_that, follows_contract, assert_obs_eq
+from gym_datums.envs.portfolio_env import DatumsError
+from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done
 
 
 @pytest.fixture
@@ -64,7 +65,7 @@ def fill_datums(datums, assets, num_values, value=1):
 
 
 def test_reset_returns_first_value_from_datums(make_env, datums):
-    datums.add().rows([1], )
+    datums.add().rows([1], [2])
     assert_obs_eq(make_env().reset(), [1])
 
 
@@ -87,10 +88,16 @@ def test_reset_returns_properly_windowed_observation(make_env, datums):
 
 
 def test_reset_combined_setup_observation(make_env, datums):
-    datums.add().rows([2, 1, 3],
-                      [3, 2, 4])
-    datums.add().rows([0, -1, 1],
-                      [1, 0, 2])
+    datums.add().rows(
+        [2, 1, 3],
+        [3, 2, 4],
+        [1, 1, 1],
+    )
+    datums.add().rows(
+        [0, -1, 1],
+        [1, 0, 2],
+        [1, 1, 1],
+    )
     assert_obs_eq(make_env(window_size=2).reset(), [[[2, 3], [0, 1]],
                                                     [[1, 2], [-1, 0]],
                                                     [[3, 4], [1, 2]]])
@@ -101,7 +108,58 @@ def test_create_returns_as_observations_when_configured(make_env, datums):
         [2, 1, 4],
         [4, 2, 8],
         [1, 4, 2],
+        [1, 1, 1],
     )
     assert_obs_eq(make_env(window_size=2, calc_returns=True).reset(), [[2, 0.25],
                                                                        [2, 2],
                                                                        [2, 0.25]])
+
+
+def test_stepping_the_environment_returns_next_observation(make_env, datums):
+    datums.add().rows([1], [2], [3])
+    env = make_env()
+    env.reset()
+    assert_obs_eq(unpack_obs(idle_step(env)), [2])
+    assert_obs_eq(unpack_obs(idle_step(env)), [3])
+
+
+def idle_step(env):
+    return env.step(0)
+
+
+def test_resetting_the_environment_resets_observations(make_env, datums):
+    datums.add().rows([1], [2], [3])
+    env = make_env()
+    env.reset()
+    assert_obs_eq(unpack_obs(idle_step(env)), [2])
+    env.reset()
+    assert_obs_eq(unpack_obs(idle_step(env)), [2])
+
+
+def test_environment_is_done_at_the_last_observation(make_env, datums):
+    datums.add().rows([1], [2], [3])
+    env = make_env()
+    env.reset()
+    assert not unpack_done(idle_step(env))
+    assert unpack_done(idle_step(env))
+
+
+def test_raise_an_error_when_not_enough_data_for_a_single_step(make_env, datums):
+    datums.add().rows([1], [2])
+    env = make_env(window_size=2)
+    with pytest.raises(DatumsError):
+        env.reset()
+
+
+def test_stepping_with_returns(make_env, datums):
+    datums.add().rows(
+        [2, 1, 4],
+        [4, 2, 8],
+        [1, 4, 2],
+        [1, 1, 1],
+    )
+    env = make_env(window_size=2, calc_returns=True)
+    env.reset()
+    assert_obs_eq(unpack_obs(idle_step(env)), [[0.25, 1],
+                                               [2, 0.25],
+                                               [0.25, 0.5]])

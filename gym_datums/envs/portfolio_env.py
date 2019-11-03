@@ -3,6 +3,24 @@ from gym import spaces, Env
 from more_itertools import first, collapse, windowed
 
 
+class ReturnTransformer:
+    def __init__(self):
+        self._prv_obs = None
+
+    def __call__(self, obs, get_next_obs):
+        if self._prv_obs is None:
+            self._prv_obs = obs
+            obs = get_next_obs()
+        ret = obs / self._prv_obs
+        self._prv_obs = obs
+        return ret
+
+
+class IdentityTransformer:
+    def __call__(self, obs, get_next_obs):
+        return obs
+
+
 class PortfolioEnv(Env):
     metadata = {'render.modes': ['human']}
 
@@ -10,12 +28,12 @@ class PortfolioEnv(Env):
         self._datums = datums
         self._datums_iters = None
         self._window_size = window_size
-        self._calc_returns = calc_returns
+        self._transformer = ReturnTransformer() if calc_returns else IdentityTransformer()
         self.action_space = spaces.Discrete(1)
         self._calc_shape = self._determine_shape()
         high, low = self._datums_minmax()
         self.observation_space = spaces.Box(low, high, self._obs_shape(), dtype=np.float32)
-        self._prv_raw_obs = None
+        self._upcoming_obs = None
 
     def _datums_minmax(self):
         low = min(collapse(self._datums))
@@ -34,34 +52,26 @@ class PortfolioEnv(Env):
     def window_size(self):
         return self._window_size
 
-    @property
-    def calc_returns(self):
-        return self._calc_returns
-
     def reset(self):
         self._datums_iters = [windowed(d, self.window_size) for d in self._datums]
         obs = self._next_obs()
+        try:
+            self._upcoming_obs = self._next_obs()
+        except StopIteration:
+            raise DatumsError("Not enough data in the time series to create a single step.")
         return obs
 
     def _next_obs(self):
-        raw = self._read_obs_from_datums()
-        if self.calc_returns:
-            raw = self._transform_to_return(raw)
-        obs = self._shape_to_observation(raw)
+        obs = self._read_next_obs()
+        obs = self._transformer(obs, self._read_next_obs)
+        obs = self._shape_to_observation(obs)
         return obs
 
-    def _read_obs_from_datums(self):
+    def _read_next_obs(self):
         obs = np.empty(shape=self._calc_shape)
         for asset, it in enumerate(self._datums_iters):
             obs[:, asset, :] = np.array(next(it)).transpose()
         return obs
-
-    def _transform_to_return(self, raw):
-        if self._prv_raw_obs is None:
-            self._prv_raw_obs = raw
-            raw = self._read_obs_from_datums()
-        raw /= self._prv_raw_obs
-        return raw
 
     def _shape_to_observation(self, obs):
         obs = obs.squeeze()
@@ -70,10 +80,21 @@ class PortfolioEnv(Env):
         return obs
 
     def step(self, action):
-        pass
+        ret = self._upcoming_obs
+        done = False
+        try:
+            self._upcoming_obs = self._next_obs()
+        except StopIteration:
+            done = True
+
+        return ret, None, done, None
 
     def render(self, mode='human'):
         pass
 
     def close(self):
         pass
+
+
+class DatumsError(ValueError):
+    pass
