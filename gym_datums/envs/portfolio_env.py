@@ -1,6 +1,6 @@
 import numpy as np
 from gym import spaces, Env
-from more_itertools import first, collapse
+from more_itertools import first, collapse, windowed
 
 
 class PortfolioEnv(Env):
@@ -8,11 +8,12 @@ class PortfolioEnv(Env):
 
     def __init__(self, datums=None, window_size=1):
         self._datums = datums
+        self._datums_iters = None
         self._window_size = window_size
         self.action_space = spaces.Discrete(1)
+        self._calc_shape = self._determine_shape()
         high, low = self._datums_minmax()
-        shape = self._determine_shape()
-        self.observation_space = spaces.Box(low, high, shape, dtype=np.float32)
+        self.observation_space = spaces.Box(low, high, self._obs_shape(), dtype=np.float32)
 
     def _datums_minmax(self):
         low = min(collapse(self._datums))
@@ -22,15 +23,32 @@ class PortfolioEnv(Env):
     def _determine_shape(self):
         values = first(self._datums).shape[1]
         num_assets = len(self._datums)
-        return (values,) + tuple(d for d in (num_assets, self.window_size) if d > 1)
+        return values, num_assets, self.window_size
+
+    def _obs_shape(self):
+        return (first(self._calc_shape),) + tuple(d for d in self._calc_shape[1:] if d > 1)
 
     @property
     def window_size(self):
         return self._window_size
 
     def reset(self):
-        d = first(self._datums)
-        return first(d)
+        self._datums_iters = [windowed(d, self.window_size) for d in self._datums]
+        obs = self._next_obs()
+        return obs
+
+    def _next_obs(self):
+        obs = np.empty(shape=self._calc_shape)
+        for asset, it in enumerate(self._datums_iters):
+            obs[:, asset, :] = np.array(next(it)).transpose()
+        obs = self._shape_to_observation(obs)
+        return obs
+
+    def _shape_to_observation(self, obs):
+        obs = obs.squeeze()
+        if self._calc_shape[0] == 1:
+            obs = np.expand_dims(obs, axis=0)
+        return obs
 
     def step(self, action):
         pass
