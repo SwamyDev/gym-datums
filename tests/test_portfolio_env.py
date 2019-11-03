@@ -8,8 +8,8 @@ from tests.aux import assert_that, follows_contract, assert_obs_eq
 
 @pytest.fixture
 def make_env(datums):
-    def factory(window_size=1):
-        return PortfolioEnv(datums.get_list(), window_size=window_size)
+    def factory(window_size=1, calc_returns=False):
+        return PortfolioEnv(datums.get_list(), window_size, calc_returns)
 
     return factory
 
@@ -94,3 +94,14 @@ def test_reset_combined_setup_observation(make_env, datums):
     assert_obs_eq(make_env(window_size=2).reset(), [[[2, 3], [0, 1]],
                                                     [[1, 2], [-1, 0]],
                                                     [[3, 4], [1, 2]]])
+
+
+def test_create_returns_as_observations_when_configured(make_env, datums):
+    datums.add().rows(
+        [2, 1, 4],
+        [4, 2, 8],
+        [1, 4, 2],
+    )
+    assert_obs_eq(make_env(window_size=2, calc_returns=True).reset(), [[2, 0.25],
+                                                                       [2, 2],
+                                                                       [2, 0.25]])
