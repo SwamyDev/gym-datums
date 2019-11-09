@@ -12,7 +12,7 @@ from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, 
 @pytest.fixture
 def make_env(datums):
     def factory(window_size=1, calc_returns=False, cash=1, relative_reward=False):
-        return PortfolioEnv(datums.get_list(), window_size, calc_returns, cash, relative_reward)
+        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, relative_reward)
 
     return factory
 
@@ -231,10 +231,10 @@ def assert_portfolio(actual, expected):
     np.testing.assert_array_equal(actual.assets, expected)
 
 
-@pytest.mark.skip
 def test_immediate_relative_reward(make_ready_env, datums):
-    datums.add().rows([1], [0.5], [0.5], [1])
+    datums.add().rows([1], [1], [0.5], [0.5], [1])
     env = make_ready_env(cash=10, relative_reward=True)
+    assert unpack_reward(env.step([0, 1])) == 1
     assert unpack_reward(env.step([0, 1])) == 0.5
     assert unpack_reward(env.step([0, 1])) == 1
-    assert unpack_reward(env.step([1, 0])) == 2
+    assert unpack_reward(env.step([0, 1])) == 2

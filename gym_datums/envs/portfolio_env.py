@@ -4,21 +4,22 @@ from more_itertools import first, collapse, windowed
 
 
 class ReturnTransformer:
-    def __init__(self):
-        self._prv_obs = None
+    def __init__(self, initial_value=None, get_next=None):
+        self._prv_val = initial_value
+        self._get_next = get_next
 
-    def __call__(self, obs, get_next_obs):
-        if self._prv_obs is None:
-            self._prv_obs = obs
-            obs = get_next_obs()
-        ret = obs / self._prv_obs
-        self._prv_obs = obs
+    def __call__(self, val):
+        if self._prv_val is None:
+            self._prv_val = val
+            val = self._get_next()
+        ret = val / self._prv_val
+        self._prv_val = val
         return ret
 
 
 class IdentityTransformer:
-    def __call__(self, obs, get_next_obs):
-        return obs
+    def __call__(self, val):
+        return val
 
 
 class Portfolio:
@@ -60,18 +61,18 @@ class Portfolio:
 class PortfolioEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, datums=None, window_size=1, calc_returns=False, cash=1, relative_reward=False):
+    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False, relative_reward=False):
         self._datums = datums
         self._datums_iters = None
         self._window_size = window_size
-        self._transformer = ReturnTransformer() if calc_returns else IdentityTransformer()
+        self._portfolio = Portfolio(cash, self.num_assets + 1)
+        self._obs_trans = ReturnTransformer(get_next=self._read_next_obs) if calc_returns else IdentityTransformer()
+        self._rwd_trans = ReturnTransformer(initial_value=1) if relative_reward else IdentityTransformer()
         self.action_space = spaces.Box(1, -1, (self.num_assets + 1,), dtype=np.float32)
         self._calc_shape = self._determine_shape()
         high, low = self._datums_minmax()
         self.observation_space = spaces.Box(low, high, self._obs_shape(), dtype=np.float32)
         self._observation = None
-
-        self._portfolio = Portfolio(cash, self.num_assets + 1)
 
     def _datums_minmax(self):
         low = min(collapse(self._datums))
@@ -112,7 +113,7 @@ class PortfolioEnv(Env):
         try:
             raw = self._read_next_obs()
             self._portfolio.update(raw)
-            self._observation = self._transformer(raw, self._read_next_obs)
+            self._observation = self._obs_trans(raw)
             self._observation = self._shape_to_observation(self._observation)
         except StopIteration:
             done = True
@@ -136,7 +137,7 @@ class PortfolioEnv(Env):
 
     def step(self, action):
         self._portfolio.shift(action)
-        reward = self._portfolio.normalized_value()
+        reward = self._rwd_trans(self._portfolio.normalized_value())
         obs, done = self._move_to_next_datum()
         return obs, reward, done, None
 
