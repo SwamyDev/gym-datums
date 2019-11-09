@@ -6,13 +6,13 @@ from gym import spaces
 
 from gym_datums.envs import PortfolioEnv
 from gym_datums.envs.portfolio_env import DatumsError
-from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done
+from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward
 
 
 @pytest.fixture
 def make_env(datums):
-    def factory(window_size=1, calc_returns=False):
-        return PortfolioEnv(datums.get_list(), window_size, calc_returns)
+    def factory(window_size=1, calc_returns=False, cash=1, relative_reward=False):
+        return PortfolioEnv(datums.get_list(), window_size, calc_returns, cash, relative_reward)
 
     return factory
 
@@ -34,7 +34,7 @@ def test_adherence_to_gym_contract(make_env, gym_interface, gym_properties):
 
 @pytest.mark.parametrize('series, minmax', [
     ([[1]], (1, 1)),
-    ([[-1], [1], [2]], (-1, 2)),
+    ([[2], [1], [3]], (1, 3)),
 ])
 def test_single_value_single_datum_observation_space(make_env, datums, series, minmax):
     datums.add().rows(*series)
@@ -107,12 +107,12 @@ def test_reset_combined_setup_observation(make_env, datums):
         [1, 1, 1],
     )
     datums.add().rows(
-        [1e-6, -1, 1],
+        [1e-6, 1e-9, 1],
         [1, 1e-6, 2],
         [1, 1, 1],
     )
     assert_obs_eq(make_env(window_size=2).reset(), [[[2, 3], [1e-6, 1]],
-                                                    [[1, 2], [-1, 1e-6]],
+                                                    [[1, 2], [1e-9, 1e-6]],
                                                     [[3, 4], [1, 2]]])
 
 
@@ -136,7 +136,12 @@ def test_stepping_the_environment_returns_next_observation(make_ready_env, datum
 
 
 def idle_step(env):
-    return env.step(0)
+    a = normalize(env.portfolio.assets)
+    return env.step(a)
+
+
+def normalize(vector):
+    return vector / np.linalg.norm(vector, 1)
 
 
 def test_resetting_the_environment_resets_observations(make_ready_env, datums):
@@ -174,9 +179,62 @@ def test_stepping_with_returns(make_ready_env, datums):
                                                [0.25, 0.5]])
 
 
-@pytest.mark.parametrize('invalid', [0, np.nan, -np.inf, np.inf])
+@pytest.mark.parametrize('invalid', [0, np.nan, np.inf, -1e-5])
 def test_raise_error_when_upcoming_invalid_datum_is_encountered(make_ready_env, datums, invalid):
     datums.add().rows([2], [1], [invalid])
     env = make_ready_env()
     with pytest.raises(DatumsError):
         idle_step(env)
+
+
+@pytest.mark.parametrize('num_assets', [1, 2])
+def test_action_shape_is_dependent_on_number_of_assets(make_ready_env, datums, num_assets):
+    fill_datums(datums, num_assets, 1)
+    env = make_ready_env()
+    assert env.action_space == make_box(high=1, low=-1, shape=(num_assets + 1,))
+
+
+def test_idle_immediate_reward(make_ready_env, datums):
+    datums.add().rows([1], [1], [2])
+    env = make_ready_env(cash=10)
+    assert unpack_reward(idle_step(env)) == 1.0
+
+
+def test_positive_immediate_reward(make_ready_env, datums):
+    datums.add().rows([1], [1], [2], [1], [2])
+    env = make_ready_env(cash=10)
+    assert unpack_reward(env.step([0, 1])) == 1.0
+    assert unpack_reward(env.step([1, 0])) == 2.0
+    assert unpack_reward(env.step([0, 1])) == 2.0
+    assert unpack_reward(env.step([1, 0])) == 4.0
+
+
+def test_negative_immediate_reward(make_ready_env, datums):
+    datums.add().rows([1], [1], [0.5], [1], [0.5])
+    env = make_ready_env(cash=10)
+    assert unpack_reward(env.step([0, 1])) == 1.0
+    assert unpack_reward(env.step([1, 0])) == 0.5
+    assert unpack_reward(env.step([0, 1])) == 0.5
+    assert unpack_reward(env.step([1, 0])) == 0.25
+
+
+def test_reset_returns_portfolio_to_original_state(make_ready_env, datums):
+    datums.add().rows([1], [2])
+    env = make_ready_env(cash=10)
+    env.step([0, 1])
+    assert_portfolio(env.portfolio, np.array([0, 5]))
+    env.reset()
+    assert_portfolio(env.portfolio, np.array([10, 0]))
+
+
+def assert_portfolio(actual, expected):
+    np.testing.assert_array_equal(actual.assets, expected)
+
+
+@pytest.mark.skip
+def test_immediate_relative_reward(make_ready_env, datums):
+    datums.add().rows([1], [0.5], [0.5], [1])
+    env = make_ready_env(cash=10, relative_reward=True)
+    assert unpack_reward(env.step([0, 1])) == 0.5
+    assert unpack_reward(env.step([0, 1])) == 1
+    assert unpack_reward(env.step([1, 0])) == 2
