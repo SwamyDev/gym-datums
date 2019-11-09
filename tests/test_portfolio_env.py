@@ -6,7 +6,7 @@ from gym import spaces
 
 from gym_datums.envs import PortfolioEnv
 from gym_datums.envs.portfolio_env import DatumsError
-from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward
+from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward, until_done
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ def test_reset_combined_setup_observation(make_env, datums):
                                                     [[3, 4], [1, 2]]])
 
 
-def test_create_returns_as_observations_when_configured(make_env, datums):
+def test_calculate_returns_as_observations_when_configured(make_env, datums):
     datums.add().rows(
         [2, 1, 4],
         [4, 2, 8],
@@ -164,6 +164,14 @@ def test_raise_an_error_when_not_enough_data_for_a_single_step(make_env, datums)
     env = make_env(window_size=2)
     with pytest.raises(DatumsError):
         env.reset()
+
+
+def test_raise_an_error_when_stepping_past_done(make_ready_env, datums):
+    datums.add().rows([1], [2])
+    env = make_ready_env()
+    list(until_done(env, [1, 0]))
+    with pytest.raises(DatumsError):
+        idle_step(env)
 
 
 def test_stepping_with_returns(make_ready_env, datums):

@@ -73,6 +73,7 @@ class PortfolioEnv(Env):
         high, low = self._datums_minmax()
         self.observation_space = spaces.Box(low, high, self._obs_shape(), dtype=np.float32)
         self._observation = None
+        self._done = False
 
     def _datums_minmax(self):
         low = min(collapse(self._datums))
@@ -102,22 +103,22 @@ class PortfolioEnv(Env):
         self._portfolio.reset()
         self._datums_iters = [windowed(d, self.window_size) for d in self._datums]
         self._move_to_next_datum()
-        obs, done = self._move_to_next_datum()
-        if done:
+        obs = self._move_to_next_datum()
+        if self._done:
             raise DatumsError("Not enough data in the time series to create a single step.")
         return obs
 
     def _move_to_next_datum(self):
         prv_obs = self._observation
-        done = False
+        self._done = False
         try:
             raw = self._read_next_obs()
             self._portfolio.update(raw)
             self._observation = self._obs_trans(raw)
             self._observation = self._shape_to_observation(self._observation)
         except StopIteration:
-            done = True
-        return prv_obs, done
+            self._done = True
+        return prv_obs
 
     def _read_next_obs(self):
         obs = np.empty(shape=self._calc_shape)
@@ -131,15 +132,18 @@ class PortfolioEnv(Env):
 
     def _shape_to_observation(self, obs):
         obs = obs.squeeze()
-        if self._calc_shape[0] == 1:
+        if self._calc_shape[0] == 1:  # force observations to arrays because most ANNs don't use scalars directly
             obs = np.expand_dims(obs, axis=0)
         return obs
 
     def step(self, action):
+        if self._done:
+            raise DatumsError("Stepping past the end of the time series")
+
         self._portfolio.shift(action)
         reward = self._rwd_trans(self._portfolio.normalized_value())
-        obs, done = self._move_to_next_datum()
-        return obs, reward, done, None
+        obs = self._move_to_next_datum()
+        return obs, reward, self._done, None
 
     def render(self, mode='human'):
         pass
