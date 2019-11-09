@@ -48,10 +48,15 @@ def datums():
     return DatumsStub()
 
 
+@pytest.fixture()
+def baseline_datums():
+    return DatumStub()
+
+
 @pytest.fixture
 def make_env(datums):
-    def factory(window_size=1, calc_returns=False, cash=1, relative_reward=False, only_final_value=False):
-        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns)
+    def factory(window_size=1, calc_returns=False, cash=1, baseline=None):
+        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, baseline)
 
     return factory
 

@@ -3,6 +3,10 @@ from gym import spaces, Env
 from more_itertools import first, collapse, windowed
 
 
+def normalize(vector):
+    return vector / np.linalg.norm(vector, 1)
+
+
 class ReturnTransformer:
     def __init__(self, initial_value=None, get_next=None):
         self._prv_val = initial_value
@@ -25,11 +29,16 @@ class IdentityTransformer:
 class Portfolio:
     cash_index = 0
 
-    def __init__(self, cash, size):
+    def __init__(self, cash, size=None, distribution=None):
         self._cash = cash
+        if size:
+            self._assets = np.zeros(size)
+            self._assets[self.cash_index] = self._cash
+        else:
+            self._assets = distribution * self._cash
+            size = len(self._assets)
+        self._init_assets = self.assets
         self._action_mat = np.identity(size)
-        self._assets = np.zeros(size)
-        self._assets[self.cash_index] = self._cash
         self._prices = np.empty(size)
         self._prices[self.cash_index] = 1
 
@@ -38,8 +47,7 @@ class Portfolio:
         return self._assets
 
     def reset(self):
-        self._assets = np.zeros_like(self._assets)
-        self._assets[self.cash_index] = self._cash
+        self._assets = self._init_assets
 
     def update(self, observation):
         self._prices[1:] = observation[0, :, -1]
@@ -58,20 +66,48 @@ class Portfolio:
         return np.matmul(self._prices, self.assets) / self._cash
 
 
+class FixedPortfolio:
+    def __init__(self, datums):
+        self._datums = datums
+        self._datums_iter = None
+        self._current = None
+        self._cash = None
+
+    def reset(self):
+        self._datums_iter = iter(self._datums)
+
+    def update(self, _):
+        self._current = next(self._datums_iter)
+        if self._cash is None:
+            self._cash = self._current
+
+    def normalized_value(self):
+        return self._current / self._cash
+
+
+def make_buy_and_hold(action_space):
+    dist = np.ones(action_space.shape)
+    dist[0] = 0
+    return normalize(dist)
+
+
 class PortfolioEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False):
+    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False, baseline=None):
         self._datums = datums
         self._datums_iters = None
         self._window_size = window_size
-        self._portfolio = Portfolio(cash, self.num_assets + 1)
         self._obs_trans = ReturnTransformer(get_next=self._read_next_obs) if calc_returns else IdentityTransformer()
-
         self.action_space = spaces.Box(1, -1, (self.num_assets + 1,), dtype=np.float32)
         self._calc_shape = self._determine_shape()
         high, low = self._datums_minmax()
         self.observation_space = spaces.Box(low, high, self._obs_shape(), dtype=np.float32)
+        self._portfolio = Portfolio(cash, size=self.num_assets + 1)
+        if baseline is None:
+            self._baseline = Portfolio(cash, distribution=make_buy_and_hold(self.action_space))
+        else:
+            self._baseline = FixedPortfolio(baseline)
         self._observation = None
         self._done = False
 
@@ -101,6 +137,7 @@ class PortfolioEnv(Env):
 
     def reset(self):
         self._portfolio.reset()
+        self._baseline.reset()
         self._datums_iters = [windowed(d, self.window_size) for d in self._datums]
         self._move_to_next_datum()
         obs = self._move_to_next_datum()
@@ -114,6 +151,7 @@ class PortfolioEnv(Env):
         try:
             raw = self._read_next_obs()
             self._portfolio.update(raw)
+            self._baseline.update(raw)
             self._observation = self._obs_trans(raw)
             self._observation = self._shape_to_observation(self._observation)
         except StopIteration:
@@ -142,8 +180,9 @@ class PortfolioEnv(Env):
 
         self._portfolio.shift(action)
         reward = self._portfolio.normalized_value()
+        baseline = self._baseline.normalized_value()
         obs = self._move_to_next_datum()
-        return obs, reward, self._done, None
+        return obs, reward, self._done, {'baseline': baseline}
 
     def render(self, mode='human'):
         pass

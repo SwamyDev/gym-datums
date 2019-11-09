@@ -2,8 +2,9 @@ import numpy as np
 import pytest
 from gym import spaces
 
-from gym_datums.envs.portfolio_env import DatumsError
-from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward, until_done
+from gym_datums.envs.portfolio_env import DatumsError, normalize
+from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward, until_done, \
+    unpack_info
 
 
 def test_adherence_to_gym_contract(make_env, gym_interface, gym_properties):
@@ -118,10 +119,6 @@ def idle_step(env):
     return env.step(a)
 
 
-def normalize(vector):
-    return vector / np.linalg.norm(vector, 1)
-
-
 def test_resetting_the_environment_resets_observations(make_ready_env, datums):
     datums.add().rows([1], [2], [3])
     env = make_ready_env()
@@ -215,3 +212,39 @@ def test_reset_returns_portfolio_to_original_state(make_ready_env, datums):
 
 def assert_portfolio(actual, expected):
     np.testing.assert_array_equal(actual.assets, expected)
+
+
+def test_by_default_use_buy_and_hold_baseline(make_ready_env, datums):
+    datums.add().rows([1], [2], [0.5], [4])
+    env = make_ready_env(cash=10)
+    assert unpack_info(idle_step(env))['baseline'] == 2
+    assert unpack_info(idle_step(env))['baseline'] == 0.5
+    assert unpack_info(idle_step(env))['baseline'] == 4
+
+
+def test_buy_and_hold_baseline_with_multiple_assets(make_ready_env, datums):
+    datums.add().rows([1], [2], [0.5], [4])
+    datums.add().rows([1], [1], [3], [2])
+    env = make_ready_env(cash=10)
+    assert unpack_info(idle_step(env))['baseline'] == 1.5
+    assert unpack_info(idle_step(env))['baseline'] == 3.5 / 2
+    assert unpack_info(idle_step(env))['baseline'] == 3
+
+
+def test_configure_datum_as_baseline(make_ready_env, datums, baseline_datums):
+    datums.add().rows([1], [2], [0.5])
+    baseline_datums.rows(10, 5, 20)
+    env = make_ready_env(cash=10, baseline=baseline_datums)
+    assert unpack_info(idle_step(env))['baseline'] == 0.5
+    assert unpack_info(idle_step(env))['baseline'] == 2
+
+
+def test_reset_baseline_datums(make_ready_env, datums, baseline_datums):
+    datums.add().rows([1], [2], [0.5])
+    baseline_datums.rows(10, 5, 20)
+    env = make_ready_env(cash=10, baseline=baseline_datums)
+    assert unpack_info(idle_step(env))['baseline'] == 0.5
+    assert unpack_info(idle_step(env))['baseline'] == 2
+    env.reset()
+    assert unpack_info(idle_step(env))['baseline'] == 0.5
+    assert unpack_info(idle_step(env))['baseline'] == 2

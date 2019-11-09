@@ -65,6 +65,10 @@ def unpack_done(step_tuple):
     return step_tuple[2]
 
 
+def unpack_info(step_tuple):
+    return step_tuple[3]
+
+
 def until_done(env, action):
     done = False
     while not done:
