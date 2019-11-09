@@ -11,8 +11,8 @@ from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, 
 
 @pytest.fixture
 def make_env(datums):
-    def factory(window_size=1, calc_returns=False, cash=1, relative_reward=False):
-        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, relative_reward)
+    def factory(window_size=1, calc_returns=False, cash=1, relative_reward=False, only_final_value=False):
+        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, relative_reward, only_final_value)
 
     return factory
 
@@ -246,3 +246,12 @@ def test_immediate_relative_reward(make_ready_env, datums):
     assert unpack_reward(env.step([0, 1])) == 0.5
     assert unpack_reward(env.step([0, 1])) == 1
     assert unpack_reward(env.step([0, 1])) == 2
+
+
+def test_final_value_of_portfolio_as_only_reward(make_ready_env, datums):
+    datums.add().rows([1], [1], [2], [1], [2])
+    env = make_ready_env(cash=10, only_final_value=True)
+    assert unpack_reward(env.step([0, 1])) == 0.0
+    assert unpack_reward(env.step([1, 0])) == 0.0
+    assert unpack_reward(env.step([0, 1])) == 0.0
+    assert unpack_reward(env.step([1, 0])) == 4.0
