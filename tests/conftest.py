@@ -1,5 +1,9 @@
+from functools import wraps
+
 import numpy as np
 import pytest
+
+from gym_datums.envs import PortfolioEnv
 
 
 class DatumStub:
@@ -42,3 +46,22 @@ def gym_properties():
 @pytest.fixture()
 def datums():
     return DatumsStub()
+
+
+@pytest.fixture
+def make_env(datums):
+    def factory(window_size=1, calc_returns=False, cash=1, relative_reward=False, only_final_value=False):
+        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns)
+
+    return factory
+
+
+@pytest.fixture
+def make_ready_env(make_env):
+    @wraps(make_env)
+    def reset_wrapper(*args, **kwargs):
+        env = make_env(*args, **kwargs)
+        env.reset()
+        return env
+
+    return reset_wrapper

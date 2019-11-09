@@ -61,15 +61,12 @@ class Portfolio:
 class PortfolioEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False, relative_reward=False,
-                 only_final_value=False):
+    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False):
         self._datums = datums
         self._datums_iters = None
         self._window_size = window_size
         self._portfolio = Portfolio(cash, self.num_assets + 1)
         self._obs_trans = ReturnTransformer(get_next=self._read_next_obs) if calc_returns else IdentityTransformer()
-        self._rwd_trans = ReturnTransformer(initial_value=1) if relative_reward else IdentityTransformer()
-        self._only_final = only_final_value
 
         self.action_space = spaces.Box(1, -1, (self.num_assets + 1,), dtype=np.float32)
         self._calc_shape = self._determine_shape()
@@ -144,10 +141,8 @@ class PortfolioEnv(Env):
             raise DatumsError("Stepping past the end of the time series")
 
         self._portfolio.shift(action)
-        reward = self._rwd_trans(self._portfolio.normalized_value())
+        reward = self._portfolio.normalized_value()
         obs = self._move_to_next_datum()
-        if self._only_final and not self._done:
-            reward = 0
         return obs, reward, self._done, None
 
     def render(self, mode='human'):

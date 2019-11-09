@@ -1,31 +1,9 @@
-from functools import wraps
-
 import numpy as np
 import pytest
 from gym import spaces
 
-from gym_datums.envs import PortfolioEnv
 from gym_datums.envs.portfolio_env import DatumsError
 from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward, until_done
-
-
-@pytest.fixture
-def make_env(datums):
-    def factory(window_size=1, calc_returns=False, cash=1, relative_reward=False, only_final_value=False):
-        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, relative_reward, only_final_value)
-
-    return factory
-
-
-@pytest.fixture
-def make_ready_env(make_env):
-    @wraps(make_env)
-    def reset_wrapper(*args, **kwargs):
-        env = make_env(*args, **kwargs)
-        env.reset()
-        return env
-
-    return reset_wrapper
 
 
 def test_adherence_to_gym_contract(make_env, gym_interface, gym_properties):
@@ -237,21 +215,3 @@ def test_reset_returns_portfolio_to_original_state(make_ready_env, datums):
 
 def assert_portfolio(actual, expected):
     np.testing.assert_array_equal(actual.assets, expected)
-
-
-def test_immediate_relative_reward(make_ready_env, datums):
-    datums.add().rows([1], [1], [0.5], [0.5], [1])
-    env = make_ready_env(cash=10, relative_reward=True)
-    assert unpack_reward(env.step([0, 1])) == 1
-    assert unpack_reward(env.step([0, 1])) == 0.5
-    assert unpack_reward(env.step([0, 1])) == 1
-    assert unpack_reward(env.step([0, 1])) == 2
-
-
-def test_final_value_of_portfolio_as_only_reward(make_ready_env, datums):
-    datums.add().rows([1], [1], [2], [1], [2])
-    env = make_ready_env(cash=10, only_final_value=True)
-    assert unpack_reward(env.step([0, 1])) == 0.0
-    assert unpack_reward(env.step([1, 0])) == 0.0
-    assert unpack_reward(env.step([0, 1])) == 0.0
-    assert unpack_reward(env.step([1, 0])) == 4.0
