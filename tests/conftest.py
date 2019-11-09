@@ -55,8 +55,8 @@ def baseline_datums():
 
 @pytest.fixture
 def make_env(datums):
-    def factory(window_size=1, calc_returns=False, cash=1, baseline=None):
-        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, baseline)
+    def factory(window_size=1, calc_returns=False, cash=1, commission=0, baseline=None):
+        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, commission, baseline)
 
     return factory
 

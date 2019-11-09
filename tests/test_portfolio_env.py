@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from gym import spaces
+from pytest import approx
 
 from gym_datums.envs.portfolio_env import DatumsError, normalize
 from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward, until_done, \
@@ -248,3 +249,27 @@ def test_reset_baseline_datums(make_ready_env, datums, baseline_datums):
     env.reset()
     assert unpack_info(idle_step(env))['baseline'] == 0.5
     assert unpack_info(idle_step(env))['baseline'] == 2
+
+
+def test_commission_fees_are_deducted(make_ready_env, datums):
+    datums.add().rows([1], [1], [2], [1], [2])
+    env = make_ready_env(cash=10, commission=0.1)
+    assert unpack_reward(env.step([0, 1])) == 0.9
+    assert unpack_reward(env.step([1, 0])) == approx((2 * 0.9) * 0.9)
+    assert unpack_reward(env.step([0, 1])) == approx((2 * 0.9) * 0.9 ** 2)
+    assert unpack_reward(env.step([1, 0])) == approx((2 * (2 * 0.9) * 0.9 ** 2) * 0.9)
+
+
+def test_commission_fees_are_not_deducted_when_assets_are_not_moved(make_ready_env, datums):
+    datums.add().rows([1], [1], [2])
+    env = make_ready_env(cash=10, commission=0.1)
+    assert unpack_reward(idle_step(env)) == 1.0
+    assert unpack_reward(idle_step(env)) == 1.0
+
+
+def test_commission_fees_are_deducted_on_all_shifted_assets(make_ready_env, datums):
+    datums.add().rows([1], [1], [3])
+    datums.add().rows([1], [1], [0.5])
+    env = make_ready_env(cash=10, commission=0.1)
+    assert unpack_reward(env.step([0, 0.6, 0.4])) == 0.9
+    assert unpack_reward(env.step([1, 0, 0])) == approx((2 * 0.9) * 0.9)

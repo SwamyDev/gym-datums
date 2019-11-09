@@ -29,8 +29,9 @@ class IdentityTransformer:
 class Portfolio:
     cash_index = 0
 
-    def __init__(self, cash, size=None, distribution=None):
+    def __init__(self, cash, commission, size=None, distribution=None):
         self._cash = cash
+        self._commission = commission
         if size:
             self._assets = np.zeros(size)
             self._assets[self.cash_index] = self._cash
@@ -54,7 +55,10 @@ class Portfolio:
 
     def shift(self, action):
         m = self._make_price_shift_mat(action)
-        self._assets = np.matmul(m, self.assets)
+        new_a = np.matmul(m, self.assets)
+        diff = new_a - self._assets
+        diff[diff < 0] = 0
+        self._assets = new_a - diff * self._commission
 
     def _make_price_shift_mat(self, action):
         p = np.expand_dims(self._prices, 0)
@@ -94,7 +98,7 @@ def make_buy_and_hold(action_space):
 class PortfolioEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False, baseline=None):
+    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False, commission=0, baseline=None):
         self._datums = datums
         self._datums_iters = None
         self._window_size = window_size
@@ -103,9 +107,9 @@ class PortfolioEnv(Env):
         self._calc_shape = self._determine_shape()
         high, low = self._datums_minmax()
         self.observation_space = spaces.Box(low, high, self._obs_shape(), dtype=np.float32)
-        self._portfolio = Portfolio(cash, size=self.num_assets + 1)
+        self._portfolio = Portfolio(cash, commission, size=self.num_assets + 1)
         if baseline is None:
-            self._baseline = Portfolio(cash, distribution=make_buy_and_hold(self.action_space))
+            self._baseline = Portfolio(cash, 0, distribution=make_buy_and_hold(self.action_space))
         else:
             self._baseline = FixedPortfolio(baseline)
         self._observation = None
