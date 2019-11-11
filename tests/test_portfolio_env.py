@@ -178,13 +178,13 @@ def test_action_shape_is_dependent_on_number_of_assets(make_ready_env, datums, n
     assert env.action_space == make_box(high=1, low=-1, shape=(num_assets + 1,))
 
 
-def test_idle_immediate_reward(make_ready_env, datums):
+def test_idle_reward(make_ready_env, datums):
     datums.add().rows([1], [1], [2])
     env = make_ready_env(cash=10)
     assert unpack_reward(idle_step(env)) == 1.0
 
 
-def test_positive_immediate_reward(make_ready_env, datums):
+def test_positive_reward(make_ready_env, datums):
     datums.add().rows([1], [1], [2], [1], [2])
     env = make_ready_env(cash=10)
     assert unpack_reward(env.step([0, 1])) == 1.0
@@ -193,7 +193,7 @@ def test_positive_immediate_reward(make_ready_env, datums):
     assert unpack_reward(env.step([1, 0])) == 4.0
 
 
-def test_negative_immediate_reward(make_ready_env, datums):
+def test_negative_reward(make_ready_env, datums):
     datums.add().rows([1], [1], [0.5], [1], [0.5])
     env = make_ready_env(cash=10)
     assert unpack_reward(env.step([0, 1])) == 1.0
