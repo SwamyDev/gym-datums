@@ -212,7 +212,7 @@ def test_reset_returns_portfolio_to_original_state(make_ready_env, datums):
 
 
 def assert_portfolio(actual, expected):
-    np.testing.assert_array_equal(actual.assets, expected)
+    np.testing.assert_almost_equal(actual.assets, expected)
 
 
 def test_by_default_use_buy_and_hold_baseline(make_ready_env, datums):
@@ -273,3 +273,10 @@ def test_commission_fees_are_deducted_on_all_shifted_assets(make_ready_env, datu
     env = make_ready_env(cash=10, commission=0.1)
     assert unpack_reward(env.step([0, 0.6, 0.4])) == 0.9
     assert unpack_reward(env.step([1, 0, 0])) == approx((2 * 0.9) * 0.9)
+
+
+def test_commission_fees_on_real_example(make_ready_env, datums):
+    datums.add().rows([6425.8], [6425.8])
+    env = make_ready_env(cash=100, commission=0.0016)
+    env.step([0.0997454, 0.9002546])
+    assert_portfolio(env.portfolio, np.array([9.97454, 0.01398758]))
