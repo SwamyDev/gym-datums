@@ -1,10 +1,18 @@
 language: python
 python:
-  - '3.6'
+- '3.6'
 install:
-  - make install TARGET=test
+- make install TARGET=test
 script:
-  - pip install python-coveralls
-  - make coverage
+- pip install python-coveralls
+- make coverage
 after_success:
-  - coveralls
+- coveralls
+deploy:
+  provider: pypi
+  user: __token__
+  password:
+    secure: VvRvgN5BnAhQ/GhqcabyUmrdZY6ri/bcO8YBHHTjP0g7UsuveqFTzKRl7lu2DztkZ3W10D62/s+1MPTpeqpLhTZJtiquWbrtHdLmigEsn0UlMf6n4aHyBv6ol7xcufACNPHUt/Z+oys6pLGUmn4OShtr+KkMm3PAXSMSsPtL4mElpoDBujljHGUxKyCx/8u5Z+B14y3HEsPiKNAhtQ0xRw/Rq+SGDshSL6QM4saOgf85y+gfWaN9wX3brnFxcA+B+LlAeh4hrVKHM6yayX7liMeuqezdpQ3W2crBcfvyMUXxEHdehAPbtaDDgPE4JSqwsRUi+Z2ZWusR9vogsKUS3Npy8jDWyjThNvkXad7SaTxlN+QCZc7cvp6Za1Nwupysd13o9kb+TrVhEP0a6qxb7LFdNsL8VzEI/A3I+Dxj2Ga+ZA+Lr40qBdv/D1hpd9nM3EQ7JeJ3pqV7qkDr5dpuEc6At0J0wG5tuvr2Si2WM+ryZp6W/2d5Dh7H9A/lB+7WRkT8X8jpHH4s4+YQQt6sPtekKYhKFdU2ntj5QLqA1V0f0qmAqGMfwtgU84oeOk1NXUUTSnz561Xnx89FZV7CpNZMhpSG4/VObM9zx3jgNvQ2M5QJTJfOqY7qNMaml5RLqFcQWGPExfduxiNX6FGUAaqQ2rWdtkzCIaAs0BoOuj4=
+  on:
+    tags: true
+  distributions: sdist bdist_wheel

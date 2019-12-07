@@ -16,7 +16,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/SwamyDev/gym-datums',
-    packages=find_packages(include='gym_datums'),
+    packages=find_packages(include=['gym_datums', 'gym_datums.*']),
     install_requires=['gym'],
     extras_require={'test': ['pytest', 'pytest-cov']},
 )
