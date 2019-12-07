@@ -1,5 +1,6 @@
 import numpy as np
 from gym import spaces, Env
+from gym.error import ResetNeeded
 from more_itertools import first, collapse, windowed
 
 
@@ -166,7 +167,7 @@ class PortfolioEnv(Env):
 
     def step(self, action):
         if self._done:
-            raise DatumsError("Stepping past the end of the time series")
+            raise PortfolioResetNeeded("Stepping past the end of the time series")
 
         self._portfolio.shift(action)
         reward = self._portfolio.normalized_value()
@@ -179,6 +180,10 @@ class PortfolioEnv(Env):
 
     def close(self):
         pass
+
+
+class PortfolioResetNeeded(ResetNeeded):
+    pass
 
 
 class DatumsError(ValueError):

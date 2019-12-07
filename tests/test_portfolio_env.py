@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pytest import approx
 
-from gym_datums.envs.portfolio_env import DatumsError
+from gym_datums.envs.portfolio_env import DatumsError, PortfolioResetNeeded
 from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward, until_done, \
     unpack_info, idle_step, make_box
 
@@ -124,7 +124,7 @@ def test_raise_an_error_when_stepping_past_done(make_ready_env, datums):
     datums.add().rows([1], [2])
     env = make_ready_env()
     list(until_done(env, [1, 0]))
-    with pytest.raises(DatumsError):
+    with pytest.raises(PortfolioResetNeeded):
         idle_step(env)
 
 
