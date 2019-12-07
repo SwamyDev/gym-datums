@@ -1,11 +1,10 @@
 import numpy as np
 import pytest
-from gym import spaces
 from pytest import approx
 
-from gym_datums.envs.portfolio_env import DatumsError, normalize
+from gym_datums.envs.portfolio_env import DatumsError
 from tests.aux import assert_that, follows_contract, assert_obs_eq, unpack_obs, unpack_done, unpack_reward, until_done, \
-    unpack_info
+    unpack_info, idle_step, make_box
 
 
 def test_adherence_to_gym_contract(make_env, gym_interface, gym_properties):
@@ -19,10 +18,6 @@ def test_adherence_to_gym_contract(make_env, gym_interface, gym_properties):
 def test_single_value_single_datum_observation_space(make_env, datums, series, minmax):
     datums.add().rows(*series)
     assert make_env().observation_space == make_box(minmax[0], minmax[1], shape=(1,))
-
-
-def make_box(high, low, shape):
-    return spaces.Box(high, low, shape, dtype=np.float32)
 
 
 def test_multiple_values_observation_space(make_env, datums):
@@ -96,28 +91,11 @@ def test_reset_combined_setup_observation(make_env, datums):
                                                     [[3, 4], [1, 2]]])
 
 
-def test_calculate_returns_as_observations_when_configured(make_env, datums):
-    datums.add().rows(
-        [2, 1, 4],
-        [4, 2, 8],
-        [1, 4, 2],
-        [1, 1, 1],
-    )
-    assert_obs_eq(make_env(window_size=2, calc_returns=True).reset(), [[2, 0.25],
-                                                                       [2, 2],
-                                                                       [2, 0.25]])
-
-
 def test_stepping_the_environment_returns_next_observation(make_ready_env, datums):
     datums.add().rows([1], [2], [3])
     env = make_ready_env()
     assert_obs_eq(unpack_obs(idle_step(env)), [2])
     assert_obs_eq(unpack_obs(idle_step(env)), [3])
-
-
-def idle_step(env):
-    a = normalize(env.portfolio.assets)
-    return env.step(a)
 
 
 def test_resetting_the_environment_resets_observations(make_ready_env, datums):
@@ -150,19 +128,6 @@ def test_raise_an_error_when_stepping_past_done(make_ready_env, datums):
         idle_step(env)
 
 
-def test_stepping_with_returns(make_ready_env, datums):
-    datums.add().rows(
-        [2, 1, 4],
-        [4, 2, 8],
-        [1, 4, 2],
-        [1, 1, 1],
-    )
-    env = make_ready_env(window_size=2, calc_returns=True)
-    assert_obs_eq(unpack_obs(idle_step(env)), [[0.25, 1],
-                                               [2, 0.25],
-                                               [0.25, 0.5]])
-
-
 @pytest.mark.parametrize('invalid', [0, np.nan, np.inf, -1e-5])
 def test_raise_error_when_upcoming_invalid_datum_is_encountered(make_ready_env, datums, invalid):
     datums.add().rows([2], [1], [invalid])
@@ -175,7 +140,7 @@ def test_raise_error_when_upcoming_invalid_datum_is_encountered(make_ready_env, 
 def test_action_shape_is_dependent_on_number_of_assets(make_ready_env, datums, num_assets):
     fill_datums(datums, num_assets, 1)
     env = make_ready_env()
-    assert env.action_space == make_box(high=1, low=-1, shape=(num_assets + 1,))
+    assert env.action_space == make_box(low=-1, high=1, shape=(num_assets + 1,))
 
 
 def test_idle_reward(make_ready_env, datums):

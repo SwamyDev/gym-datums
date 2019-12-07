@@ -7,25 +7,6 @@ def normalize(vector):
     return vector / np.linalg.norm(vector, 1)
 
 
-class ReturnTransformer:
-    def __init__(self, initial_value=None, get_next=None):
-        self._prv_val = initial_value
-        self._get_next = get_next
-
-    def __call__(self, val):
-        if self._prv_val is None:
-            self._prv_val = val
-            val = self._get_next()
-        ret = val / self._prv_val
-        self._prv_val = val
-        return ret
-
-
-class IdentityTransformer:
-    def __call__(self, val):
-        return val
-
-
 class Portfolio:
     cash_index = 0
 
@@ -98,15 +79,14 @@ def make_buy_and_hold(action_space):
 class PortfolioEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, datums=None, window_size=1, cash=1, calc_returns=False, commission=0, baseline=None):
+    def __init__(self, datums=None, window_size=1, cash=1, commission=0, baseline=None):
         self._datums = datums
         self._datums_iters = None
         self._window_size = window_size
-        self._obs_trans = ReturnTransformer(get_next=self._read_next_obs) if calc_returns else IdentityTransformer()
-        self.action_space = spaces.Box(1, -1, (self.num_assets + 1,), dtype=np.float32)
+        self.action_space = spaces.Box(-1, 1, (self.num_assets + 1,), dtype=np.float32)
         self._calc_shape = self._determine_shape()
         high, low = self._datums_minmax()
-        self.observation_space = spaces.Box(low, high, self._obs_shape(), dtype=np.float32)
+        self.observation_space = spaces.Box(low, high, self.obs_shape(), dtype=np.float32)
         self._portfolio = Portfolio(cash, commission, size=self.num_assets + 1)
         if baseline is None:
             self._baseline = Portfolio(cash, 0, distribution=make_buy_and_hold(self.action_space))
@@ -124,7 +104,7 @@ class PortfolioEnv(Env):
         values = first(self._datums).shape[1]
         return values, self.num_assets, self.window_size
 
-    def _obs_shape(self):
+    def obs_shape(self):
         return (first(self._calc_shape),) + tuple(d for d in self._calc_shape[1:] if d > 1)
 
     @property
@@ -138,6 +118,10 @@ class PortfolioEnv(Env):
     @property
     def portfolio(self):
         return self._portfolio
+
+    @property
+    def datums(self):
+        return self._datums
 
     def reset(self):
         self._portfolio.reset()
@@ -156,11 +140,13 @@ class PortfolioEnv(Env):
             raw = self._read_next_obs()
             self._portfolio.update(raw)
             self._baseline.update(raw)
-            self._observation = self._obs_trans(raw)
-            self._observation = self._shape_to_observation(self._observation)
+            self._observation = self._shape_to_observation(raw)
         except StopIteration:
             self._done = True
         return prv_obs
+
+    def skip_state(self):
+        return self._move_to_next_datum()
 
     def _read_next_obs(self):
         obs = np.empty(shape=self._calc_shape)

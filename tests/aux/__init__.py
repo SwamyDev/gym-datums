@@ -1,4 +1,7 @@
 import numpy as np
+from gym import spaces
+
+from gym_datums.envs.portfolio_env import normalize
 
 
 def assert_that(obj, matcher):
@@ -74,3 +77,12 @@ def until_done(env, action):
     while not done:
         o, r, done, _ = env.step(action)
         yield o, r, done, _
+
+
+def idle_step(env):
+    a = normalize(env.portfolio.assets)
+    return env.step(a)
+
+
+def make_box(low, high, shape):
+    return spaces.Box(low, high, shape, dtype=np.float32)

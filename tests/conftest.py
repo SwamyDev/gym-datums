@@ -2,6 +2,7 @@ from functools import wraps
 
 import numpy as np
 import pytest
+from gym import spaces
 
 from gym_datums.envs import PortfolioEnv
 
@@ -55,8 +56,8 @@ def baseline_datums():
 
 @pytest.fixture
 def make_env(datums):
-    def factory(window_size=1, calc_returns=False, cash=1, commission=0, baseline=None):
-        return PortfolioEnv(datums.get_list(), window_size, cash, calc_returns, commission, baseline)
+    def factory(window_size=1, cash=1, commission=0, baseline=None):
+        return PortfolioEnv(datums.get_list(), window_size, cash, commission, baseline)
 
     return factory
 
@@ -70,3 +71,12 @@ def make_ready_env(make_env):
         return env
 
     return reset_wrapper
+
+
+def pytest_assertrepr_compare(op, left, right):
+    if isinstance(left, spaces.Box) and isinstance(right, spaces.Box) and op == "==":
+        return [
+            f"assert {left}[low: {left.low}, high:{left.high}] != {right}[low: {right.low}, high:{right.high}]"
+        ]
+
+    return None
